@@ -1,4 +1,4 @@
-# Simple-n-cheap-A-pretty-nice-one-hand-Hall-Effect-Magnetic-Switch-Keyboard
+# Simple and cheap one hand Hall Effect (aka Magnetic) Switch Keyboard
 Based on Arduino Leonardo, fully coded by myself.<br>
 ## Now achieved:<br>
 1. RT function, adjust parameter `rt_active` and `rt_deactive` to change sensitivity.<br>
