@@ -9,6 +9,6 @@ thus, do not change variable in main code use other eeprom write code to change 
  although the Hall Effect unit might not be so sensitive enough to maximum the precision.)<br>
 5. simple EC11 detect, you can adjust volume and bind key on it.
 ## To do list
-1.Key binding software
-2.3D-print shell
-3.stm32 version
+1.Key binding software<br>
+2.3D-print shell<br>
+3.stm32 version<br>
