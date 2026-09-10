@@ -2,6 +2,8 @@
 #include "KeyManager.h"
 #include "EncoderManager.h"
 #include "SubHID.h"
+#include "HallUnitManager.h"
+#include "EEPROMManager.h"
 // extern volatile HIDConReport_t report;
 int debug = 0;
 
@@ -48,7 +50,7 @@ void loop() {
   //     // keyOperation(i);
   //   }
   // }
-  ENCButtonOnPress();
+  ENCButtonOnPress(calibrateAll);
   // encoderOnRotate();
   HIDStateUpdate(2);
   delayMicroseconds(500);

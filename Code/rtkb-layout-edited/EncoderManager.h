@@ -81,14 +81,14 @@ void encoderRotateStateRefresh() {
 }
 
 // ---------- 编码器按钮（校准功能，保持不变） ----------
-void ENCButtonOnPress() {
+void ENCButtonOnPress(void (*func)()) {
     static int bt_hold = 0;
     if (digitalRead(ENC_BT) == 0) {
         bt_hold++;
     } else {
         if (bt_hold > 10) {
             bt_hold = 0;
-            calibrateAll();
+            *func;
         }
     }
 }
