@@ -57,6 +57,7 @@ void flagInit(){
 }
 
 uint16_t getKeyState(){
+  uint16_t buttonbuf = 0;
   _kbScan();
   for (int i = 0; i < BUTTONCOUNT; i++) {
     // --- 按下检测 ---
@@ -114,23 +115,18 @@ void calibrateKey(uint8_t key){
   bt_minimum[key]=20000;
   bool cali_not_finish = true;
   while(cali_not_finish){
+    #if DEBUG
     // Serial.print(bt_maximum[0]);    
     //   Serial.print(' ');
     //   Serial.print(bt_minimum[0]);    
     //   Serial.print(' ');
     //   Serial.print('\n');
+    #endif
     _kbScan();
     if(buttonstate[key] > bt_maximum[key]){ bt_maximum[key] = buttonstate[key]; }
     if(buttonstate[key] < bt_minimum[key]){ bt_minimum[key] = buttonstate[key]; }
     if(buttonstate[key] < cali_threshold_position ){
       while(cali_not_finish){
-        // Serial.print(bt_maximum[0]);    
-        //   Serial.print(' ');
-        //   Serial.print(bt_minimum[0]);    
-        //   Serial.print(' ');
-        //   Serial.print(cali_not_finish);    
-        //   Serial.print(' ');
-        //   Serial.print('\n');
         _kbScan();
         if(buttonstate[key] > bt_maximum[key]){ bt_maximum[key] = buttonstate[key]; }
         if(buttonstate[key] < bt_minimum[key]){ bt_minimum[key] = buttonstate[key]; }
@@ -140,8 +136,8 @@ void calibrateKey(uint8_t key){
   }
   keyParameterSet(key,MAX_VALUE,bt_maximum[key]);
   keyParameterSet(key,MIN_VALUE,bt_minimum[key]);
-  // EEPROM.put((12*key),bt_maximum[key]);
-  // EEPROM.put((12*key+2),bt_minimum[key]);
+  #if DEBUG
+  // Serial.print("Calibrate Down \n");
   // Serial.print(key);
   // Serial.print(' ');
   // Serial.print(bt_maximum[0]);
@@ -155,8 +151,9 @@ void calibrateKey(uint8_t key){
   // Serial.print(' ');
   // Serial.print(min1);
   // Serial.print('\n');
+  #endif
   delay(100);
-  ParameterRefresh(key);
+  parameterRefresh(key);
 }
 
 void calibrateAll(){

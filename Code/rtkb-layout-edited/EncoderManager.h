@@ -70,17 +70,17 @@ void encoderRotateStateRefresh() {
         report.mediaButtons |= (1 << 1);
     }
 
-    // 发送“按下”报告
-    HIDCon.setState(&report);
+    // // 发送“按下”报告
+    // HIDCon.setState(&report);
 
-    // 立即清除两位（模拟释放）
-    report.mediaButtons &= ~((1 << 1) | (1 << 2));
+    // // 立即清除两位（模拟释放）
+    // report.mediaButtons &= ~((1 << 1) | (1 << 2));
 
-    // 发送“释放”报告
-    HIDCon.setState(&report);
+    // // 发送“释放”报告
+    // HIDCon.setState(&report);
 }
 
-// ---------- 编码器按钮（校准功能，保持不变） ----------
+// ---------- 编码器按钮（校准功能） ----------
 void ENCButtonOnPress(void (*func)()) {
     static int bt_hold = 0;
     if (digitalRead(ENC_BT) == 0) {

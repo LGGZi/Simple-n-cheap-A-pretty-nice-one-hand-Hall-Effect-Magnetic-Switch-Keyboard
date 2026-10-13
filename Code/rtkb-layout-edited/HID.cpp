@@ -135,6 +135,18 @@ bool HID_::setup(USBSetup& setup)
 		}
 		if (request == HID_SET_REPORT)
 		{
+			// if(setup.wLength == 9){
+			// 	uint8_t report_id = 0;
+			// 	uint8_t data_recv[8];
+			// 	uint8_t full_data[9];
+			// 	if(9 == USB_RecvControl(full_data, 9)){
+			// 		for(int i = 0;i < 8;i++){
+			// 			data_recv[i] = full_data[i+1];
+			// 		}
+			// 		memcpy(HIDcmd, data_recv, 8);
+			// 	}
+			// }
+
 			uint8_t full_data[9];
 			// 解析 report id 与 data_recv
 			uint8_t report_id = 0;
@@ -151,6 +163,8 @@ bool HID_::setup(USBSetup& setup)
 				if(8 == USB_RecvControl(full_data,8)){
 					report_id = 0;
 					data_recv = &full_data[0];
+					memcpy(HIDcmd, data_recv, 8);
+					return true;
 				}
 			}
 			//若符合条件（接受了8字节数据或九字节数据第一字节表示的report id= 0x04），将接收到的内容复制到HIDcmd中
