@@ -58,17 +58,19 @@
 
 
 
-// Byte 6, when MAP_DO_OVERRIDE：该按键映射区里的第几个槽（0 开始，< MAXIMUM_BINDABLE_KEY）
+// Byte 6, when MAP_DO_OVERRIDE：该按键映射区里的第几个槽（0 开始，< MAXIMUM_BINDABLE_KEY）/when MAP_DO_CLEAR：清空哪个按键，值为按键编号（0开始），BUTTONCOUNT为全部清空
 
 uint8_t pre_cmd[8];
 
 /*-------------------------------------------------------------
 独立的设备信息报文：结构为 
 [0xFF]、 [BUTTONCOUNT]、 [是否为磁轴0xF0 == y|0x0F == n]、 [编码器数量，0就是没有）]、 [设备类型（保留给后续手台主控使用）]、 
-后三位保留，可能会用于设备Layout识别
+后二位保留、最后一位固件版本号
+版本号格式示例 0 1 | 0 1 1 | 0 0 1  ==  1.31
+前两位小数点前整数、中间三位小数点后一位、最后三位为小数点后第二位
 */
 void HIDDeviceInfoUpload(){
-    uint8_t resp[8] = { 0xFF, BUTTONCOUNT, 0xF0, 0x01, 0x01, 0, 0, 0 };
+    uint8_t resp[8] = { 0xFF, BUTTONCOUNT, 0xF0, 0x01, 0x01, 0, 0, 0x41 };
     HID().SendReport(4, resp, 8);
 }
 
@@ -118,11 +120,11 @@ void HIDQueryUpload(uint8_t queryWhat, uint8_t queryScope, uint8_t key) {
     if(queryScope == CQ_SINGLE && !(key < BUTTONCOUNT)){
         return;   //单键查询的按键号非法
     }
-    uint8_t firstKey = (queryScope == CQ_SINGLE) ? key : 0;
-    uint8_t lastKey  = (queryScope == CQ_SINGLE) ? key : (BUTTONCOUNT - 1);
+    uint8_t first_key = (queryScope == CQ_SINGLE) ? key : 0;
+    uint8_t last_key  = (queryScope == CQ_SINGLE) ? key : (BUTTONCOUNT - 1);
     const uint8_t params[4] = { RT_ACTIVE, RT_DEACTIVE, UPPER_DEADZONE, LOWER_DEADZONE };
 
-    for(uint8_t k = firstKey; k <= lastKey; k++){
+    for(uint8_t k = first_key; k <= last_key; k++){
         if(queryWhat == QUERY_PARAM){
             for(uint8_t i = 0; i < 4; i++){
                 HIDSendParamItem(params[i], k, keyParameterGetValue(k, params[i]));
@@ -146,36 +148,33 @@ void HIDQueryUpload(uint8_t queryWhat, uint8_t queryScope, uint8_t key) {
 void HIDcmdResponse(const uint8_t *report_cmd) {
     //先做一份快照：校准是阻塞操作，期间 USB 中断可能已经把 HIDcmd 改写成新指令，
     //如果一直引用 report_cmd，最后的 FIN 就会回成别的指令
-    uint8_t cmdBuf[8];
+    uint8_t cmd_buf[8];
     for(uint8_t i = 0; i < 8; i++){
-        cmdBuf[i] = report_cmd[i];
+        cmd_buf[i] = report_cmd[i];
     }
-    HIDSendAck(cmdBuf);
-    uint8_t cmd = cmdBuf[0];
+    HIDSendAck(cmd_buf);
+    uint8_t cmd = cmd_buf[0];
     switch (cmd) {
         // ------------------------------------------------------------
         // 命令 1：修改按键映射
         // ------------------------------------------------------------
         case CMD_SET_MAP: {
-            uint8_t operation = cmdBuf[4];      //Byte5
+            uint8_t operation = cmd_buf[4];      //Byte5
             switch (operation){
                 case MAP_DO_APPEND:{
-                    uint8_t device = cmdBuf[1]; //Byte2
-                    uint8_t key = cmdBuf[2];    //Byte3
-                    uint8_t offset = cmdBuf[3]; //Byte4
+                    uint8_t device = cmd_buf[1]; //Byte2
+                    uint8_t key = cmd_buf[2];    //Byte3
+                    uint8_t offset = cmd_buf[3]; //Byte4
                     keyCodeAddToEEPROM(key, device, offset);
                 break;
                 }
                 case MAP_DO_OVERRIDE:{
-                    uint8_t device = cmdBuf[1];         //Byte2
-                    uint8_t key = cmdBuf[2];            //Byte3
-                    uint8_t offset = cmdBuf[3];         //Byte4
-                    uint8_t storageIndex = cmdBuf[5];   //Byte6：本按键的第几个映射槽
-                    if(storageIndex < MAXIMUM_BINDABLE_KEY){
-                        _keyCodeSetToEEPROM(key, storageIndex, device, offset);
-                        //写完这一条，把它后面的槽全部设成空槽：
-                        //这样上位机只要按顺序发它有的那几条映射就行，尾部不用再补发空槽
-                        keyMapClearFromEEPROM(key, storageIndex + 1);
+                    uint8_t device = cmd_buf[1];         //Byte2
+                    uint8_t key = cmd_buf[2];            //Byte3
+                    uint8_t offset = cmd_buf[3];         //Byte4
+                    uint8_t slot = cmd_buf[5];   //Byte6：本按键的第几个映射槽
+                    if(slot < MAXIMUM_BINDABLE_KEY){
+                        _keyCodeSetToEEPROM(key, slot, device, offset);
                     }
                 break;
                 }
@@ -183,12 +182,19 @@ void HIDcmdResponse(const uint8_t *report_cmd) {
                     #if DEBUG
                         Serial.print("收到清空指令\n");
                     #endif
-                    keyCodeClear();
+                    uint8_t key = cmd_buf[2];           //Byte3
+                    uint8_t clear_whom = cmd_buf[5];    //Byte6
+                    if(clear_whom == BUTTONCOUNT){
+                        keyCodeClearAll();
+                    }else if(clear_whom >= 0 && clear_whom < BUTTONCOUNT){
+                        keyMapClearInEEPROM(key, clear_whom);
+                        //写完后用这个指令，把它后面的槽全部设成空槽
+                    }
                     keyCodeInit();
                 break;
                 }
             }
-            HIDSendFin(cmdBuf);
+            HIDSendFin(cmd_buf);
         break;
         }
         // ------------------------------------------------------------
@@ -198,11 +204,11 @@ void HIDcmdResponse(const uint8_t *report_cmd) {
             // ------------------------------------------------------------
             // 在此处调用的“修改参数”函数
             // ------------------------------------------------------------
-            uint8_t parameter = cmdBuf[1];
-            uint8_t key = cmdBuf[2];
-            uint16_t value = (uint16_t)cmdBuf[3]  << 8 | cmdBuf[4];
+            uint8_t parameter = cmd_buf[1];
+            uint8_t key = cmd_buf[2];
+            uint16_t value = (uint16_t)cmd_buf[3]  << 8 | cmd_buf[4];
             keyParameterSet(key, parameter, value);
-            HIDSendFin(cmdBuf);
+            HIDSendFin(cmd_buf);
         break;
         }
 
@@ -210,20 +216,20 @@ void HIDcmdResponse(const uint8_t *report_cmd) {
         // 命令 3：校准操作
         // ------------------------------------------------------------
         case CMD_CALIBRATE: {
-            uint8_t mode = cmdBuf[1];
-            uint8_t offset = cmdBuf[2];
+            uint8_t mode = cmd_buf[1];
+            uint8_t offset = cmd_buf[2];
             if(mode == CQ_ALL){
                 for(int i = 0; i < BUTTONCOUNT; i++){
                     calibrateKey(i);
                     //每个按键校准完立刻回一个带按键号的FIN，上位机可以据此显示逐个校准的进度；
                     //最后一个（i == BUTTONCOUNT-1）就是整条指令的完成标志，不再额外回FIN
-                    HIDSendCalibFin(cmdBuf, (uint8_t)i);
+                    HIDSendCalibFin(cmd_buf, (uint8_t)i);
                 }
             }else if(mode == CQ_SINGLE){
                 calibrateKey(offset);
-                HIDSendCalibFin(cmdBuf, offset);
+                HIDSendCalibFin(cmd_buf, offset);
             }else{
-                HIDSendFin(cmdBuf);
+                HIDSendFin(cmd_buf);
             }
         break;
         }
@@ -233,14 +239,14 @@ void HIDcmdResponse(const uint8_t *report_cmd) {
         // [1]=查询内容(QUERY_MAPPING/QUERY_PARAM) [2]=CQ_ALL/CQ_SINGLE [3]=按键号
         // ------------------------------------------------------------
         case CMD_QUERY: {
-            uint8_t queryWhat  = cmdBuf[1];   //Byte2
-            uint8_t queryScope = cmdBuf[2];   //Byte3
-            uint8_t key        = cmdBuf[3];   //Byte4
-            if(queryWhat == QUERY_DEVICE_INFO){
+            uint8_t query_what  = cmd_buf[1];   //Byte2
+            uint8_t query_scope = cmd_buf[2];   //Byte3
+            uint8_t key        = cmd_buf[3];   //Byte4
+            if(query_what == QUERY_DEVICE_INFO){
                 HIDDeviceInfoUpload();
             }else{
-                HIDQueryUpload(queryWhat, queryScope, key);
-                HIDSendFin(cmdBuf);
+                HIDQueryUpload(query_what, query_scope, key);
+                HIDSendFin(cmd_buf);
             }
         break;
         }
@@ -249,18 +255,18 @@ void HIDcmdResponse(const uint8_t *report_cmd) {
         // 字节2 = 刷新内容
         // ------------------------------------------------------------
         case CMD_REFRESH: {
-            uint8_t refresh_what = cmdBuf[1];  //Byte2
+            uint8_t refresh_what = cmd_buf[1];  //Byte2
             if(refresh_what == REFRESH_MAPPING){
                 keyCodeInit();
             }else if(refresh_what == REFRESH_PARAM){
                 keyParameterInit();
             }
-            HIDSendFin(cmdBuf);
+            HIDSendFin(cmd_buf);
         break;
         }
         default:
             // 未知命令码：也回一个 FIN，免得上位机一直等在那
-            HIDSendFin(cmdBuf);
+            HIDSendFin(cmd_buf);
         break;
     }
 }
