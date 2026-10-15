@@ -35,9 +35,8 @@ extern volatile uint8_t HIDcmd[8];
 // 复合设备的报文所对应的数据结构
 typedef struct HIDConReport {
     // 键盘部分 (Report ID 2)
-  uint8_t keyboardKeys[16];  // 前13字节为键盘按键，从UsageTable的0开始，后跟2字节多媒体键，最后跟1字节键盘修饰键
-  // uint8_t keyboardFunction[2];  // 功能键（16位）
-  // uint8_t keyboardModifiers; // 修饰键（8位）
+  uint8_t keyboardKeys[14];  // 前13字节为键盘按键，从UsageTable的0开始，后跟1字节键盘修饰键
+
     // 鼠标部分 (Report ID 3)
   uint8_t   mouseButtons; // 低3位表示按钮状态（0b00000111）
   int8_t    mouseX;       // X轴移动（-127 ~ 127）

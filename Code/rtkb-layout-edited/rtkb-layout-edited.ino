@@ -4,10 +4,8 @@
 #include "SubHID.h"
 #include "HallUnitManager.h"
 #include "EEPROMManager.h"
+#include "HIDcmdHandler.h"
 // extern volatile HIDConReport_t report;
-int debug = 0;
-
-
 
 void setup(){
   delay(1000);
@@ -22,17 +20,25 @@ void setup(){
   digitalWrite(SEL_2,LOW);
   pinMode(RD_0,INPUT);
   pinMode(RD_1,INPUT);
-  // Serial.begin(9600);
+  #if DEBUG
+    Serial.begin(9600);
+    while (!Serial) {
+      ; // 等待串口连接，仅适用于 USB CDC 板子
+    }
+    Serial.println("Serial connected");
+  #endif
   flagInit();
   keyParameterInit();
-  keyCodeConvert();
+  keyCodeInit();
   // calibrateKey(0);
   // delay(600);
   // readFromEEPROM();
 }
 
 void loop() {
-  keyOperationGlobal(getKeyState());
+  reportBufferClear();
+  // keyOperationGlobal(getKeyState());
+  keyOperation(getKeyState());
   encoderRotateStateRefresh();
   // for(int i = 0; i < BUTTONCOUNT; i++){
   //   Serial.print(" ");
@@ -50,7 +56,8 @@ void loop() {
   //     // keyOperation(i);
   //   }
   // }
-  ENCButtonOnPress(calibrateAll);
+  // ENCButtonOnPress(calibrateAll);
+  HIDcmdResponseIfChanged();
   // encoderOnRotate();
   HIDStateUpdate(2);
   delayMicroseconds(500);
