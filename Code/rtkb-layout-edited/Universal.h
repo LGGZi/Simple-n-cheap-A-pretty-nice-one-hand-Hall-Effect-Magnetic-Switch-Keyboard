@@ -1,6 +1,10 @@
 #ifndef Universal_h
 #define Universal_h
+//在这里开启或关闭串口DEBUG
+#include "SubHID.h"
 #define DEBUG 0
+#define FIRMWARE_VERSION 0x43
+
 #define MAX_VALUE 0
 #define MIN_VALUE 2
 #define RT_ACTIVE 4
@@ -43,13 +47,11 @@
 //编码器AB相对应引脚
 #define ENC_L_A 2
 #define ENC_L_B 1
+
+#if DEBUG
 char buff[80];
-struct KeyBindDataList_t{
-  uint8_t device = 0;
-  uint8_t offset = 0;
-  KeyBindDataList_t *next = NULL;
-};
-uint16_t cali_threshold_position = 260;
+#endif
+
 static uint16_t bt_maximum[BUTTONCOUNT] = {0};
 static uint16_t bt_minimum[BUTTONCOUNT] = {0};
 static uint16_t rt_active[BUTTONCOUNT] = {40,40,40,40,40,40,40,40,40,40,40,40};
@@ -60,6 +62,19 @@ static uint16_t buttonstate[BUTTONCOUNT] = {0};
 static uint16_t high_buttonflag[BUTTONCOUNT] = {0};
 static uint16_t low_buttonflag[BUTTONCOUNT] = {0};
 static uint8_t key_map[BUTTONCOUNT][MAXIMUM_BINDABLE_KEY][2] = {0};
-// volatile HIDConReport_t report;
 
+volatile HIDConReport_t report;
+static uint8_t step = 1;
+uint16_t cali_threshold_position = 260;
+
+#define HIDStateUpdate(...) _HIDStateUpdate((1, ##__VA_ARGS__))
+void _HIDStateUpdate(uint8_t LoopCount){
+  if(step < LoopCount){
+    step++;
+  }else{
+    HIDCon.setState(&report);
+    HIDCon.setConsumerState(report.mediaButtons);
+    step = 1;
+  }
+}
 #endif

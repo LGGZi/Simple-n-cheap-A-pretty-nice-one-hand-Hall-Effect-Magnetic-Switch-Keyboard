@@ -70,7 +70,7 @@ uint8_t pre_cmd[8];
 前两位小数点前整数、中间三位小数点后一位、最后三位为小数点后第二位
 */
 void HIDDeviceInfoUpload(){
-    uint8_t resp[8] = { 0xFF, BUTTONCOUNT, 0xF0, 0x01, 0x01, 0, 0, 0x41 };
+    uint8_t resp[8] = { 0xFF, BUTTONCOUNT, 0xF0, 0x01, 0x01, 0, 0, FIRMWARE_VERSION };
     HID().SendReport(4, resp, 8);
 }
 

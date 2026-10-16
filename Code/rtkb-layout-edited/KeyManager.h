@@ -3,12 +3,11 @@
 
 #include "Universal.h"
 #include "SubHID.h"
-#define HIDStateUpdate(...) _HIDStateUpdate((1, ##__VA_ARGS__))
+
 #define DEVICE 0
 #define KEYOFFSET 1
-volatile  HIDConReport_t report;
 const uint8_t keys[]{29,27,12,18,19,4,13,15,51,52,105,105,44,44};
-static uint8_t step = 1;
+
 
 
 void reportBufferClear(){
@@ -52,7 +51,7 @@ void keyOperation(uint16_t keyTriggerState){
           }
           default:
             break;   //损坏 / 未知的 device：跳过这一个槽继续处理后面的，
-                     //不要 return —— 那样这一个坏槽会让整个按键甚至其它按键都不响应
+
         }
       }
     }
@@ -67,12 +66,5 @@ void keyOperationGlobal(uint16_t keyTriggerState){
     }
   }
 }
-void _HIDStateUpdate(uint8_t LoopCount){
-  if(step < LoopCount){
-    step++;
-  }else{
-    HIDCon.setState(&report);
-    step = 1;
-  }
-}
+
 #endif
