@@ -3,6 +3,10 @@
 #include "Universal.h"
 #include "EEPROMManager.h"
 
+static uint16_t buttonstate[BUTTONCOUNT] = {0};
+static uint16_t high_buttonflag[BUTTONCOUNT] = {0};
+static uint16_t low_buttonflag[BUTTONCOUNT] = {0};
+
 void _kbScan(){
   digitalWrite(SEL_0,LOW);
   digitalWrite(SEL_1,LOW);
@@ -57,7 +61,7 @@ void flagInit(){
 }
 
 uint16_t getKeyState(){
-  uint16_t buttonbuf = 0;
+  static uint16_t buttonbuf = 0;
   _kbScan();
   for (int i = 0; i < BUTTONCOUNT; i++) {
     // --- 按下检测 ---
@@ -98,14 +102,16 @@ uint16_t getKeyState(){
     if(buttonstate[i] < (bt_minimum[i] + low_deadzone[i])){
       buttonbuf |= (uint16_t)1 << i;  // 设置对应位
     }
-    // Serial.print(buttonstate[i]);
-    // Serial.print(' ');
-    // Serial.print(high_buttonflag[i]);
-    // Serial.print(' ');
-    // Serial.print(low_buttonflag[i]);
-    // Serial.print(' ');
-    // Serial.print((buttonbuf >> 0) & i);
-    // Serial.print('\n');
+    // if(i == 0){
+    //   Serial.print(buttonstate[i]);
+    //   Serial.print(' ');
+    //   Serial.print(high_buttonflag[i]);
+    //   Serial.print(' ');
+    //   Serial.print(low_buttonflag[i]);
+    //   Serial.print(' ');
+    //   Serial.print((buttonbuf >> i) & 1);
+    //   Serial.print('\n');
+    // }
   }
   return buttonbuf;
 }

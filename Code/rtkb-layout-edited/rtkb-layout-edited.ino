@@ -56,9 +56,8 @@ void loop() {
   //     // keyOperation(i);
   //   }
   // }
-  // ENCButtonOnPress(calibrateAll);
+  ENCButtonOnPress(calibrateAll);
   HIDcmdResponseIfChanged();
-  // encoderOnRotate();
   HIDStateUpdate(2);
   delayMicroseconds(500);
 

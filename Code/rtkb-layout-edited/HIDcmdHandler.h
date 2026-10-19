@@ -1,9 +1,10 @@
-#ifndef HIDcmdHandler_h
+﻿#ifndef HIDcmdHandler_h
 #define HIDcmdHandler_h
 
 #include <stdint.h>
 #include "EEPROMManager.h"
 #include "HallUnitManager.h"
+#include "LayoutManager.h"
 // Byte 1, CMD Code
 #define CMD_SET_MAP      0x01
 #define CMD_SET_PARAM    0x02
@@ -40,6 +41,8 @@
 #define QUERY_PARAM         0x01
 #define QUERY_CALIB         0x02
 #define QUERY_DEVICE_INFO   0xFF
+// 查询配列（布局）：[1] = QUERY_LAYOUT，固件逐键回 0xFE 帧后回 FIN
+#define QUERY_LAYOUT        0xFE
 // 查询指令布局：[0]=CMD_QUERY [1]=查询内容 [2]=CQ_ALL/CQ_SINGLE [3]=按键号 [7]=序号
 //Byte 2, When refresh
 #define REFRESH_MAPPING       0x00
@@ -70,7 +73,7 @@ uint8_t pre_cmd[8];
 前两位小数点前整数、中间三位小数点后一位、最后三位为小数点后第二位
 */
 void HIDDeviceInfoUpload(){
-    uint8_t resp[8] = { 0xFF, BUTTONCOUNT, 0xF0, 0x01, 0x01, 0, 0, FIRMWARE_VERSION };
+    uint8_t resp[8] = { 0xFF, BUTTONCOUNT, 0xF0, 0x01, 0x01, LAYOUT_KIND, 0, FIRMWARE_VERSION };
     HID().SendReport(4, resp, 8);
 }
 
@@ -244,6 +247,10 @@ void HIDcmdResponse(const uint8_t *report_cmd) {
             uint8_t key        = cmd_buf[3];   //Byte4
             if(query_what == QUERY_DEVICE_INFO){
                 HIDDeviceInfoUpload();
+            }else if(query_what == QUERY_LAYOUT){
+                // 逐键上传布局，最后回 FIN（与其它查询一致）
+                HIDLayoutUpload(cmd_buf);
+                HIDSendFin(cmd_buf);
             }else{
                 HIDQueryUpload(query_what, query_scope, key);
                 HIDSendFin(cmd_buf);

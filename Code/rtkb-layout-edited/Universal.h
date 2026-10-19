@@ -1,9 +1,9 @@
-#ifndef Universal_h
+﻿#ifndef Universal_h
 #define Universal_h
 //在这里开启或关闭串口DEBUG
 #include "SubHID.h"
 #define DEBUG 0
-#define FIRMWARE_VERSION 0x43
+#define FIRMWARE_VERSION 0x44
 
 #define MAX_VALUE 0
 #define MIN_VALUE 2
@@ -52,16 +52,13 @@
 char buff[80];
 #endif
 
-static uint16_t bt_maximum[BUTTONCOUNT] = {0};
-static uint16_t bt_minimum[BUTTONCOUNT] = {0};
-static uint16_t rt_active[BUTTONCOUNT] = {40,40,40,40,40,40,40,40,40,40,40,40};
-static uint16_t rt_deactive[BUTTONCOUNT] = {40,40,40,40,40,40,40,40,40,40,40,40};
-static uint16_t high_deadzone[BUTTONCOUNT] = {20,20,20,20,20,20,20,20,20,20,20,20};
-static uint16_t low_deadzone[BUTTONCOUNT] = {20,20,20,20,20,20,20,20,20,20,20,20};
-static uint16_t buttonstate[BUTTONCOUNT] = {0};
-static uint16_t high_buttonflag[BUTTONCOUNT] = {0};
-static uint16_t low_buttonflag[BUTTONCOUNT] = {0};
-static uint8_t key_map[BUTTONCOUNT][MAXIMUM_BINDABLE_KEY][2] = {0};
+uint16_t bt_maximum[BUTTONCOUNT] = {0};
+uint16_t bt_minimum[BUTTONCOUNT] = {0};
+uint16_t rt_active[BUTTONCOUNT] = {40,40,40,40,40,40,40,40,40,40,40,40};
+uint16_t rt_deactive[BUTTONCOUNT] = {40,40,40,40,40,40,40,40,40,40,40,40};
+uint16_t high_deadzone[BUTTONCOUNT] = {20,20,20,20,20,20,20,20,20,20,20,20};
+uint16_t low_deadzone[BUTTONCOUNT] = {20,20,20,20,20,20,20,20,20,20,20,20};
+uint8_t key_map[BUTTONCOUNT][MAXIMUM_BINDABLE_KEY][2] = {0};
 
 volatile HIDConReport_t report;
 static uint8_t step = 1;
