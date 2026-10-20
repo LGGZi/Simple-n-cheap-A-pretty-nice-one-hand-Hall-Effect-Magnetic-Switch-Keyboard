@@ -9,7 +9,7 @@
 [![Host](https://img.shields.io/badge/host-KeyboardOG%20%E2%89%A5%201.07-2ea44f)](https://github.com/LGGZi/KeyBoard-OG-key-binding-tool)
 
 一把单手可用的 **14 键霍尔（磁轴）** 键盘，主控 Arduino Leonardo（ATmega32u4），
-固件和上位机都是我自己写的。支持 **RT（快速触发）**、**上下死区**、**校准**、**EC11 旋钮**，
+固件代码都是我自己写的，上位机用了些Vibe Coding。支持 **RT（快速触发）**、**上下死区**、**校准**、**EC11 旋钮**，
 参数与按键映射都存在 EEPROM 里，通过
 [KeyboardOG](https://github.com/LGGZi/KeyBoard-OG-key-binding-tool) 配置：
 
@@ -106,7 +106,7 @@ Arduino IDE 打开 `Code/rtkb-layout-edited/rtkb-layout-edited.ino`，板子选 
 | 按键 | 14 个霍尔（磁轴），3 根选择线 `SEL_0..2` + 2 路模拟输入 `RD_0(A0)`、`RD_1(A1)` 分时扫描 |
 | 输入方向 | ADC 0~1023，**数值越小 = 按得越深** |
 | 旋钮 | EC11，A/B 接 D2/D3（内部上拉），按键为独立引脚 |
-| USB | 复合设备：键盘 / 鼠标 / 手柄 / 多媒体（Report ID 1/2/3，指令走 Report ID 4） |
+| USB | 复合设备：键盘 / 鼠标 / 手柄 / 多媒体（Report ID 1/2/3/5，指令走 Report ID 4） |
 
 ```
 PCB/
@@ -133,8 +133,6 @@ Arduino IDE：打开 `Code/rtkb-layout-edited/rtkb-layout-edited.ino`，板子�
 arduino-cli compile --fqbn arduino:avr:leonardo Code/rtkb-layout-edited
 arduino-cli upload  --fqbn arduino:avr:leonardo -p COM5 Code/rtkb-layout-edited
 ```
-
-编译占用（当前版本）：Flash 约 11.8KB / 28KB，RAM 约 880B / 2.5KB。
 
 ---
 
@@ -174,7 +172,7 @@ Simple-n-cheap-...-Hall-Effect-Magnetic-Switch-Keyboard/
 | ACK / FIN | 0x05 / 0x06 | 回传 |
 | 刷新 | 0x07 | 从 EEPROM 重新载入 |
 
-三条最容易踩的坑：
+指令反馈约定：
 
 1. **一条指令回两帧**：先 ACK 再 FIN；只读一帧会把 FIN 留给下一条。
 2. **设备信息帧没有 FIN**：查询要用“收到 `0xFF` 帧”作为结束条件。
@@ -188,10 +186,6 @@ Simple-n-cheap-...-Hall-Effect-Magnetic-Switch-Keyboard/
 
 ## FAQ
 
-**Q：按键“有时有、有时没有”，但串口读数正常**
-
-- 典型原因是 `buttonbuf` 写成了局部变量（丢了锁存状态）；当前固件已是 `static`，用配套固件即可。
-
 **Q：轻按出现双击 / 松手粘滞**
 
 - 轻按双击通常是死区过大或 `rt_active` 太小；松手粘滞看 `rt_deactive` 与 `low_deadzone`。
@@ -202,13 +196,13 @@ Simple-n-cheap-...-Hall-Effect-Magnetic-Switch-Keyboard/
 - 该键的模拟通道、磁铁位置，或 `_kbScan()` 的通道表与实物不符。
 
 **Q：上位机连上就报 3000 ms 超时**
-
+- 旧版上位机bug，连接检测等待逻辑不正确，用配套版本上位机
 - 设备信息帧没有 FIN，要以“收到 `0xFF` 帧”结束；用配套版本的上位机。
 - 不要同时开 Arduino 串口监视器（固件开着 `DEBUG` 时打印会阻塞）。
 
 **Q：能改成别的键数吗**
 
-- 改 `BUTTONCOUNT` 要同步：`key_map` 维度、EEPROM 计算、`_kbScan()` 通道表、配列表长度。
+- 改 `BUTTONCOUNT` 、`key_map` 大小与参数量不能过大以超过EEPROM，键值映射与参数都在EEPROM中储存，可以通过宏定义调整单个按键的最大映射按键数、`_kbScan()`自定义按键读取、上位机tool文件夹内工具转换配列并替换代码中的layout相关代码数组（这个主要是为了上位机绘制layout，不加的话上位机直接矩阵列出所有按钮）。
 
 ---
 
@@ -234,4 +228,3 @@ Simple-n-cheap-...-Hall-Effect-Magnetic-Switch-Keyboard/
 - HID 复合描述符基于 Arduino 官方的 `Keyboard` / `HID` 示例改写。
 - 感谢在真机上反复验证 RT / 死区 / 校准 / 编码器与版本协议的过程中提供的反馈。
 
-> 本仓库未附带开源许可证；如需以 MIT / Apache-2.0 等方式开源，请在根目录添加 `LICENSE` 文件。
