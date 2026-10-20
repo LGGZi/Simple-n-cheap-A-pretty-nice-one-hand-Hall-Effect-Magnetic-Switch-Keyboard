@@ -1,4 +1,4 @@
-# 磁轴键盘固件结构说明（rtkb-layout-edited）
+﻿# 磁轴键盘固件结构说明（rtkb-layout-edited）
 
 本文档说明这套固件的**代码结构、数据流和关键约定**，用于排查问题和给后来人做参考。
 代码里的中文注释是“为什么这么写”，本文档回答“整体是怎么运转的”。
@@ -206,6 +206,9 @@ uint8_t key_map[BUTTONCOUNT][MAXIMUM_BINDABLE_KEY][2];  // [按键][槽][device,
 | `CMD_SET_PARAM` | 0x02 | 写磁轴参数：`[1]=参数号 [2]=按键 [3..4]=值` |
 | `CMD_CALIBRATE` | 0x03 | 校准：`[2]=ALL/SINGLE [3]=按键` |
 | `CMD_QUERY` | 0x04 | 查询：`[1]=0 映射 / 1 参数 / 0xFE 布局 / 0xFF 设备信息` |
+
+> `[6]` 是**这套固件要求的上位机版本**（2|3|3 位，`HOST_VERSION_REQUIRED`，当前 `0x47` = 1.07）；上位机连上后会和自己的版本比对，低于它就在状态栏/日志提示升级。
+> `[7]` 是固件版本（`FIRMWARE_VERSION`）。
 | `CMD_ACK` / `CMD_FIN` | 0x05 / 0x06 | 回传用 |
 | `CMD_REFRESH` | 0x07 | 让固件从 EEPROM 重新载入 |
 

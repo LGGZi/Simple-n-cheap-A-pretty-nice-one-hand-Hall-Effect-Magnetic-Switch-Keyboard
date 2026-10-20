@@ -3,6 +3,7 @@
 //在这里开启或关闭串口DEBUG
 #include "SubHID.h"
 #define DEBUG 0
+#define HOST_VERSION_REQUIRED 0x47   // 设备信息 [6]：这套固件要求的上位机版本（2|3|3 位）
 #define FIRMWARE_VERSION 0x44
 
 #define MAX_VALUE 0
