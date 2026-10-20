@@ -1,4 +1,4 @@
-#ifndef EEPROMManager_h
+﻿#ifndef EEPROMManager_h
 #define EEPROMManager_h
 #include "Universal.h"
 #include <EEPROM.h>
@@ -73,10 +73,20 @@ void keyParameterSet(int8_t key, int8_t valName, uint16_t value) {
     Serial.println(value);
   #endif
   if (key >= 0 && key < BUTTONCOUNT) {
-    if (valName == RT_ACTIVE | valName == RT_DEACTIVE | valName == UPPER_DEADZONE | valName == LOWER_DEADZONE) {
-      if (value > 10 && value < 980) {
-        EEPROM.put((PSOOSK * key + valName), value);
-      }
+    // 按参数分别限制范围（单位和 EEPROM 里一致：千分比，1000 = 满行程）
+    //   RT 触发行程 / RT 释放行程：10 ~ 500  （1% ~ 50%）
+    //   上死区 / 下死区：          0 ~ 200    （0 ~ 20%，0 = 关闭死区）
+    //   校准极值 MAX_VALUE / MIN_VALUE：原始 ADC 值，0 ~ 1023
+    bool accept = false;
+    if (valName == RT_ACTIVE || valName == RT_DEACTIVE) {
+      accept = (value >= 10 && value <= 500);
+    } else if (valName == UPPER_DEADZONE || valName == LOWER_DEADZONE) {
+      accept = (value <= 200);
+    } else if (valName == MAX_VALUE || valName == MIN_VALUE) {
+      accept = (value <= 1023);
+    }
+    if (accept) {
+      EEPROM.put((PSOOSK * key + valName), value);
     }
   }
 }

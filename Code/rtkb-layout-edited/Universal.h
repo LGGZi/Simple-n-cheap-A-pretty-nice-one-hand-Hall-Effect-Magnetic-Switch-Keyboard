@@ -54,10 +54,10 @@ char buff[80];
 
 uint16_t bt_maximum[BUTTONCOUNT] = {0};
 uint16_t bt_minimum[BUTTONCOUNT] = {0};
-uint16_t rt_active[BUTTONCOUNT] = {40,40,40,40,40,40,40,40,40,40,40,40};
-uint16_t rt_deactive[BUTTONCOUNT] = {40,40,40,40,40,40,40,40,40,40,40,40};
-uint16_t high_deadzone[BUTTONCOUNT] = {20,20,20,20,20,20,20,20,20,20,20,20};
-uint16_t low_deadzone[BUTTONCOUNT] = {20,20,20,20,20,20,20,20,20,20,20,20};
+uint16_t rt_active[BUTTONCOUNT] = {0};
+uint16_t rt_deactive[BUTTONCOUNT] = {0};
+uint16_t high_deadzone[BUTTONCOUNT] = {0};
+uint16_t low_deadzone[BUTTONCOUNT] = {0};
 uint8_t key_map[BUTTONCOUNT][MAXIMUM_BINDABLE_KEY][2] = {0};
 
 volatile HIDConReport_t report;

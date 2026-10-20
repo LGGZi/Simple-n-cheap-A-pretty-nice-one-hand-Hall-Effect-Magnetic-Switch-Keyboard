@@ -64,44 +64,51 @@ uint16_t getKeyState(){
   static uint16_t buttonbuf = 0;
   _kbScan();
   for (int i = 0; i < BUTTONCOUNT; i++) {
-    // --- 按下检测 ---
-    // 如果当前值低于低阈值|下死区，判定为按下，同时更新高阈值，避免释放条件过紧
-    if ((buttonstate[i] <= low_buttonflag[i])){
+    // --- 第一步：死区检测 ---
+    if(buttonstate[i] > (bt_maximum[i] - high_deadzone[i])){
+      // 上死区检测
+      buttonbuf &= ~( (uint16_t)1 << i);  // 清除对应位
+      //确保低阈值在上死区-触发行程的位置，避免低阈值离死区过近导致的误触发或断触问题
+      low_buttonflag[i] = bt_maximum[i] - high_deadzone[i] - rt_active[i];
+    }else if(buttonstate[i] < (bt_minimum[i] + low_deadzone[i])){
+      // 下死区检测
       buttonbuf |= (uint16_t)1 << i;  // 设置对应位
-      // 更新阈值
-      if((buttonstate[i] - 1) > 0 && (buttonstate[i] - 1) < bt_maximum[i]) {
-        low_buttonflag[i] = buttonstate[i] - 1;
-      }else{
-        low_buttonflag[i] = buttonstate[i];
+      //确保高阈值在下死区+释放行程的位置，避免高阈值离死区过近导致的误触发或断触问题
+      high_buttonflag[i] = bt_minimum[i] + low_deadzone[i] + rt_deactive[i];
+    }else{
+      // --- 按下检测和低阈值跟随行为 ---
+      // 如果当前值低于低阈值，判定为按下
+      if ( (buttonstate[i] <= low_buttonflag[i])){
+        buttonbuf |= (uint16_t)1 << i;  // 设置对应位
+        // 更新阈值
+        if( (buttonstate[i] - 1) > 0) {
+          low_buttonflag[i] = buttonstate[i] - 1;
+        }else if((buttonstate[i] - 1) <= 0){
+          low_buttonflag[i] = buttonstate[i];
+        }
       }
-      high_buttonflag[i] = buttonstate[i] + rt_deactive[i];
-    // 如果当前值低于下死区，判定为按下
-    }
-    // 如果当前值高于低阈值 + rt_active[i]，则重新定位低阈值
-      else if (buttonstate[i] > low_buttonflag[i] + rt_active[i]) {
-      low_buttonflag[i] = buttonstate[i] - rt_active[i];
+      // 如果当前值高于低阈值 + rt_active[i]，则重新定位低阈值
+      if (buttonstate[i] > low_buttonflag[i] + rt_active[i]) {
+        low_buttonflag[i] = buttonstate[i] - rt_active[i];
+      }
+
+      // --- 释放检测和高阈值跟随行为 ---
+      // 如果当前值高于高阈值，判定为释放
+      if (buttonstate[i] >= high_buttonflag[i]){
+        buttonbuf &= ~((uint16_t)1 << i);  // 清除对应位
+        // 更新阈值
+        if( (buttonstate[i] + 1) < bt_maximum[i]){
+          high_buttonflag[i] = buttonstate[i] + 1;
+        }else if( (buttonstate[i] + 1) >= 0){
+          high_buttonflag[i] = buttonstate[i];
+        }
+      }
+      // 如果当前值低于高阈值 - rt_deactive[i]，则重新定位高阈值
+      if (buttonstate[i] < (high_buttonflag[i] - rt_deactive[i]) ) {
+        high_buttonflag[i] = buttonstate[i] + rt_deactive[i];
+      }
     }
 
-    // --- 释放检测 ---
-    // 如果当前值高于高阈值|上死区，判定为释放，同时更新低阈值，避免触发条件过紧
-    if (buttonstate[i] >= high_buttonflag[i]){
-      buttonbuf &= ~((uint16_t)1 << i);  // 清除对应位
-      // 更新阈值
-      high_buttonflag[i] = buttonstate[i] + 1;
-      low_buttonflag[i] = buttonstate[i] - rt_active[i];
-    // 如果当前值高于上死区，判定为释放
-    }
-    // 如果当前值低于高阈值 - rt_deactive[i]，则重新定位高阈值
-      else if (buttonstate[i] < (high_buttonflag[i] - rt_deactive[i])) {
-      high_buttonflag[i] = buttonstate[i] + rt_deactive[i];
-    }
-    // --- 死区检测 ---
-    if(buttonstate[i] > (bt_maximum[i] - high_deadzone[i])){
-      buttonbuf &= ~((uint16_t)1 << i);  // 清除对应位
-    }
-    if(buttonstate[i] < (bt_minimum[i] + low_deadzone[i])){
-      buttonbuf |= (uint16_t)1 << i;  // 设置对应位
-    }
     // if(i == 0){
     //   Serial.print(buttonstate[i]);
     //   Serial.print(' ');
