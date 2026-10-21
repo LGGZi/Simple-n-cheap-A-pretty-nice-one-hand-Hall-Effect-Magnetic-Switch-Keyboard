@@ -1,4 +1,4 @@
-# One-hand hall-effect (magnetic) keyboard — 14 keys, Arduino Leonardo
+﻿# One-hand hall-effect (magnetic) keyboard — 14 keys, Arduino Leonardo
 
 [中文](README.md) | **English**
 
@@ -9,7 +9,8 @@
 [![Host](https://img.shields.io/badge/host-KeyboardOG%20%E2%89%A5%201.07-2ea44f)](https://github.com/LGGZi/KeyBoard-OG-key-binding-tool)
 
 A one-hand **14-key hall-effect (magnetic switch)** keyboard based on an Arduino Leonardo
-(ATmega32u4). Firmware and host tool are both written by me. It supports **rapid trigger (RT)**,
+(ATmega32u4). The firmware is written by me; the host tool was written with a fair amount of
+vibe coding. It supports **rapid trigger (RT)**,
 **upper/lower dead zones**, **calibration** and an **EC11 encoder**; parameters and mappings live
 in EEPROM and are configured through
 [KeyboardOG](https://github.com/LGGZi/KeyBoard-OG-key-binding-tool):
@@ -114,7 +115,7 @@ Open `Code/rtkb-layout-edited/rtkb-layout-edited.ino`, select **Arduino Leonardo
 | Keys | 14 hall switches, scanned with three select lines `SEL_0..2` and two analog inputs `RD_0 (A0)`, `RD_1 (A1)` |
 | Direction | ADC 0..1023, **smaller = pressed deeper** |
 | Encoder | EC11, A/B on D2/D3 (pull-ups), button on its own pin |
-| USB | composite device: keyboard / mouse / gamepad / media (Report ID 1/2/3, commands on ID 4) |
+| USB | composite device: keyboard / mouse / gamepad / media (Report ID 1/2/3/5, commands on ID 4) |
 
 ```
 PCB/
@@ -143,7 +144,6 @@ arduino-cli compile --fqbn arduino:avr:leonardo Code/rtkb-layout-edited
 arduino-cli upload  --fqbn arduino:avr:leonardo -p COM5 Code/rtkb-layout-edited
 ```
 
-Current footprint: ~11.8 KB flash of 28 KB, ~880 B RAM of 2.5 KB.
 
 ---
 
@@ -183,7 +183,7 @@ incrementing host sequence (the firmware drops a command identical to the previo
 | ACK / FIN | 0x05 / 0x06 | replies |
 | refresh | 0x07 | reload from EEPROM |
 
-Three things that bite most often:
+Reply conventions:
 
 1. **One command, two replies**: ACK then FIN; reading only one leaves the FIN for the next command.
 2. **The device-info frame has no FIN**: end the query when the `0xFF` frame arrives.
@@ -197,11 +197,6 @@ Full byte layouts, reply formats and the EEPROM map are in
 
 ## FAQ
 
-**Q: keys only work now and then, but the serial readings look fine**
-
-- That is the classic "`buttonbuf` was a local variable" bug (the latch is lost). The current
-  firmware keeps it `static`; use the matching firmware.
-
 **Q: double click on light presses / sticky release**
 
 - A double click usually means the dead zone is too large or `rt_active` too small; a sticky
@@ -214,14 +209,16 @@ Full byte layouts, reply formats and the EEPROM map are in
 
 **Q: the host reports a 3000 ms timeout right after connecting**
 
-- The device-info frame has no FIN; end the query on the `0xFF` frame, and use a matching host
-  version.
-- Do not keep the Arduino serial monitor open (with `DEBUG` enabled the prints block).
+- An older host had a broken connect check; use the matching host version.
+- The device-info frame has no FIN; end the query on the `0xFF` frame.
 
 **Q: can I change the key count?**
 
-- Changing `BUTTONCOUNT` also touches: `key_map` dimensions, the EEPROM maths, the `_kbScan()`
-  channel table and the layout table length.
+- Changing `BUTTONCOUNT` also means changing `key_map` sizes and keeping the parameter area
+  inside EEPROM (mappings and parameters both live there); the maximum bindings per key is a
+  macro too. `_kbScan()` decides how each key is read.
+- Use the KLE → layout-array tool in the host's `tools/` folder and replace the layout array so
+  the host draws your layout; without it the host falls back to a plain button grid.
 
 ---
 
@@ -248,5 +245,3 @@ Full byte layouts, reply formats and the EEPROM map are in
 - Thanks to everyone who kept testing RT, dead zones, calibration, the encoder and the version
   handshake on real hardware.
 
-> This repository has no open-source license yet; add a `LICENSE` file (MIT / Apache-2.0 …)
-> if you want to publish it as open source.
