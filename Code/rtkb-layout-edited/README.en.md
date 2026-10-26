@@ -1,4 +1,4 @@
-# Hall-effect keyboard firmware (rtkb-layout-edited)
+﻿# Hall-effect keyboard firmware (rtkb-layout-edited)
 
 [中文](README.md) | **English**
 
@@ -67,6 +67,20 @@ delayMicroseconds(500);           // main-loop tick
 - `HIDStateUpdate(2)` halves the effective USB report rate.
 - `report` is rebuilt every iteration, so mappings are level-triggered.
 - **Scan rate is directly affected by the debug prints in `getKeyState()`** (see §9).
+
+### 3.1 Time base (`frame_time`)
+
+`millis()` disables interrupts to read the timer on every call, and several calls inside one
+frame can straddle a tick. All timing goes through `Universal.h`:
+
+```c
+static uint32_t frame_time = 0;
+static inline void frameTimeUpdate() { frame_time = millis(); }   // read once per frame
+static inline uint32_t getFrameTime() { return frame_time; }      // everyone else reads this
+```
+
+The first statement of `loop()` is `frameTimeUpdate();`. Any new timing logic (long press,
+combo, LED pacing) must use `getFrameTime()` instead of calling `millis()` directly.
 
 ---
 

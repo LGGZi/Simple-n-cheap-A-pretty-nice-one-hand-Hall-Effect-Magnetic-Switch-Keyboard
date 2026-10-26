@@ -1,4 +1,4 @@
-// #include <FastLED.h>
+﻿// #include <FastLED.h>
 #include "KeyManager.h"
 #include "EncoderManager.h"
 #include "SubHID.h"
@@ -36,6 +36,8 @@ void setup(){
 }
 
 void loop() {
+  //每帧只在这里读一次 millis()，其它地方都用 getFrameTime()
+  frameTimeUpdate();
   reportBufferClear();
   // keyOperationGlobal(getKeyState());
   keyOperation(getKeyState());

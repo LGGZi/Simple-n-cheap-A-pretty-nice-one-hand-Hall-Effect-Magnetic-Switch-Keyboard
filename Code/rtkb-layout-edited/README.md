@@ -1,4 +1,4 @@
-# 磁轴键盘固件结构说明（rtkb-layout-edited）
+﻿# 磁轴键盘固件结构说明（rtkb-layout-edited）
 
 **中文** | [English](README.en.md)
 
@@ -63,6 +63,20 @@ delayMicroseconds(500);           // 主循环节拍
 - `HIDStateUpdate(2)` 是“隔轮发送”，把实际 USB 报文频率压到扫描频率的一半；
 - `report` 每轮清零再重建，所以映射是“电平触发”，松手即消失；
 - **扫描频率直接受 `getKeyState()` 里调试打印影响**（见 §9）。
+
+### 3.1 时间基准（`frame_time`）
+
+`millis()` 每次调用都要关中断读计时器，同一帧里多次调用还可能跨过节拍。所以时间统一走
+`Universal.h`：
+
+```c
+static uint32_t frame_time = 0;
+static inline void frameTimeUpdate() { frame_time = millis(); }   // 每帧只在这里读一次
+static inline uint32_t getFrameTime() { return frame_time; }      // 其它地方只读缓存
+```
+
+`loop()` 第一条语句是 `frameTimeUpdate();`。以后加任何需要计时的逻辑（连击、长按、灯效），
+一律用 `getFrameTime()`，不要再直接调 `millis()`。
 
 ---
 
