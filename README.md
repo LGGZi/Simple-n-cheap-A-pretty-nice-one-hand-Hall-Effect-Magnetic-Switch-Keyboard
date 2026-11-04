@@ -1,4 +1,4 @@
-# 磁轴单手键盘（14 键 · Arduino Leonardo）
+﻿# 磁轴单手键盘（14 键 · Arduino Leonardo）
 
 **中文** | [English](README.en.md)
 
@@ -9,7 +9,8 @@
 [![Host](https://img.shields.io/badge/host-KeyboardOG%20%E2%89%A5%201.07-2ea44f)](https://github.com/LGGZi/KeyBoard-OG-key-binding-tool)
 
 一把单手可用的 **14 键霍尔（磁轴）** 键盘，主控 Arduino Leonardo（ATmega32u4），
-固件代码都是我自己写的，上位机用了些Vibe Coding。支持 **RT（快速触发）**、**上下死区**、**校准**、**EC11 旋钮**，
+固件代码都是我自己写的，上位机用了些Vibe Coding。支持 **RT（快速触发）**、**上下死区**、**校准**、**EC11 旋钮**、
+**粘滞键 / 连发** 和 **23 种灯效（14 颗 WS2812B）**，
 参数与按键映射都存在 EEPROM 里，通过
 [KeyboardOG](https://github.com/LGGZi/KeyBoard-OG-key-binding-tool) 配置：
 
@@ -75,6 +76,8 @@
 
 - 上位机连上后立即比对，不匹配时状态栏、日志、版本标签都会提示；
   同时维护“软件版本 ↔ 支持的固件范围”表，判断“固件过老 / 过新”。
+- **注意**：本固件目前仍是 **1.04**，还没有 6kb 的粘滞键 / 连发（那套功能从固件 1.10 开始）；
+  用 KeyboardOG 1.10 及以上连接时会按兼容表提示「固件版本过老」，普通映射 / 磁轴参数 / 校准仍可正常使用。
 
 ---
 
@@ -106,6 +109,7 @@ Arduino IDE 打开 `Code/rtkb-layout-edited/rtkb-layout-edited.ino`，板子选 
 | 按键 | 14 个霍尔（磁轴），3 根选择线 `SEL_0..2` + 2 路模拟输入 `RD_0(A0)`、`RD_1(A1)` 分时扫描 |
 | 输入方向 | ADC 0~1023，**数值越小 = 按得越深** |
 | 旋钮 | EC11，A/B 接 D2/D3（内部上拉），按键为独立引脚 |
+| 灯带 | 14 颗 WS2812B（每键一颗，UL1~UL14），数据脚 **D13**，23 种灯效 |
 | USB | 复合设备：键盘 / 鼠标 / 手柄 / 多媒体（Report ID 1/2/3/5，指令走 Report ID 4） |
 
 ```
@@ -219,7 +223,7 @@ Simple-n-cheap-...-Hall-Effect-Magnetic-Switch-Keyboard/
 | 工程 | 说明 |
 |---|---|
 | [KeyBoard-OG-key-binding-tool](https://github.com/LGGZi/KeyBoard-OG-key-binding-tool) | 上位机（映射 / 参数 / 校准 / 配列显示） |
-| [6-button-tiny-keyboard-with-Arduino](https://github.com/LGGZi/6-button-tiny-keyboard-with-Arduino) | 六键矮轴版本（每键 RGB、12 种灯效） |
+| [6-button-tiny-keyboard-with-Arduino](https://github.com/LGGZi/6-button-tiny-keyboard-with-Arduino) | 六键矮轴版本（每键 RGB、23 种灯效、粘滞 / 连发） |
 
 ---
 

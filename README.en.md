@@ -11,8 +11,9 @@
 A one-hand **14-key hall-effect (magnetic switch)** keyboard based on an Arduino Leonardo
 (ATmega32u4). The firmware is written by me; the host tool was written with a fair amount of
 vibe coding. It supports **rapid trigger (RT)**,
-**upper/lower dead zones**, **calibration** and an **EC11 encoder**; parameters and mappings live
-in EEPROM and are configured through
+**upper/lower dead zones**, **calibration**, an **EC11 encoder**, **sticky keys / auto repeat**
+and **23 LED effects (14 × WS2812B)**; parameters and mappings live in EEPROM and are
+configured through
 [KeyboardOG](https://github.com/LGGZi/KeyBoard-OG-key-binding-tool):
 
 ```
@@ -83,6 +84,9 @@ host ──(HID Report ID 4, 8-byte commands)──> firmware
 
 - The host compares them on connect and warns in the status bar, the log and the version label.
   It also keeps a "software version ↔ supported firmware range" table.
+- **Note**: this firmware is still **1.04** and does not include the 6kb sticky-key / auto-repeat
+  features (those start at firmware 1.10). KeyboardOG 1.10 and newer will flag it as
+  "firmware too old"; normal mappings, hall parameters and calibration still work.
 
 ---
 
@@ -115,6 +119,7 @@ Open `Code/rtkb-layout-edited/rtkb-layout-edited.ino`, select **Arduino Leonardo
 | Keys | 14 hall switches, scanned with three select lines `SEL_0..2` and two analog inputs `RD_0 (A0)`, `RD_1 (A1)` |
 | Direction | ADC 0..1023, **smaller = pressed deeper** |
 | Encoder | EC11, A/B on D2/D3 (pull-ups), button on its own pin |
+| LEDs | 14 × WS2812B (one per key, UL1..UL14) on **D13**, 23 effects |
 | USB | composite device: keyboard / mouse / gamepad / media (Report ID 1/2/3/5, commands on ID 4) |
 
 ```
@@ -235,7 +240,7 @@ Full byte layouts, reply formats and the EEPROM map are in
 | Project | Description |
 |---|---|
 | [KeyBoard-OG-key-binding-tool](https://github.com/LGGZi/KeyBoard-OG-key-binding-tool) | host tool (mappings / parameters / calibration / layout preview) |
-| [6-button-tiny-keyboard-with-Arduino](https://github.com/LGGZi/6-button-tiny-keyboard-with-Arduino) | six-key low-profile version (per-key RGB, 12 effects) |
+| [6-button-tiny-keyboard-with-Arduino](https://github.com/LGGZi/6-button-tiny-keyboard-with-Arduino) | six-key low-profile version (per-key RGB, 23 effects, sticky / auto repeat) |
 
 ---
 

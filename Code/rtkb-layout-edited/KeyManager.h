@@ -1,68 +1,76 @@
-#ifndef KeyManager_h
+﻿#ifndef KeyManager_h
 #define KeyManager_h
 
 #include "Universal.h"
 #include "SubHID.h"
-
-#define DEVICE 0
-#define KEYOFFSET 1
-const uint8_t keys[]{29,27,12,18,19,4,13,15,51,52,105,105,44,44};
-
-
+#include "KeyBehaviorManager.h"
 
 void reportBufferClear(){
   memset(&report, 0, sizeof(report));
 }
-void keyOperation(uint16_t keyTriggerState){
-  for(int i = 0; i < BUTTONCOUNT; i++){
-    if((keyTriggerState >> i) & 1){
-      //用 for 而不是 while：下标一定会自增到 MAXIMUM_BINDABLE_KEY 然后退出，
-      //不存在"忘了自增就永远转下去"的可能（之前这里就是死循环的来源）
-      for(uint8_t key_map_addr = 0; key_map_addr < MAXIMUM_BINDABLE_KEY; key_map_addr++){
-        uint8_t device = key_map[i][key_map_addr][DEVICE];
-        if(device == NO_DEVICE){
-          break;   //空槽：本按键的映射到此为止
-        }
-        //每个 case 都用 {} 包起来：C++ 里 case 里的变量声明如果不用大括号，
-        //作用域会撑到整个 switch，编译告警 "jump to case label"，
-        //而且 AVR 上实测会让后面几个 case 根本不执行（表现就是只有键盘映射生效）。
-        switch(device){
-          case KEYBOARD: {
-            uint8_t high_bits = (key_map[i][key_map_addr][KEYOFFSET] >> 4) & 0x0F;
-            uint8_t low_bits = (key_map[i][key_map_addr][KEYOFFSET] & 0x0F);
-            //keyboardKeys[] 一共 14 字节（13 普通键 + 1 修饰键），
-            //越界会踩到后面的 mouseButtons，所以这里挡一下（EEPROM 数据损坏时才会发生）
-            if(high_bits < 14){
-              report.keyboardKeys[high_bits] |= ((uint8_t)1 << low_bits);
-            }
-            break;
-          }
-          case CONTROLLER: {
-            report.xboxButtons |= (uint8_t)1 << key_map[i][key_map_addr][KEYOFFSET];
-            break;
-          }
-          case MOUSE: {
-            report.mouseButtons |= (uint8_t)1 << key_map[i][key_map_addr][KEYOFFSET];
-            break;
-          }
-          case MULTIMEDIA: {
-            report.mediaButtons |= (uint8_t)1 << key_map[i][key_map_addr][KEYOFFSET];
-            break;
-          }
-          default:
-            break;   //损坏 / 未知的 device：跳过这一个槽继续处理后面的，
 
+//粘滞键：把“保持输出”的键每帧写进 report（和 6kb 一样，在 keyOperation 之后调用）
+void keyOperation_stickyKey(){
+  stickyKeyBehavior();
+}
+
+//按键映射的执行部分：把“哪几个键按下了”翻译成 HID 报文内容。
+//device 字节高 4 位是 behavior（0 普通 / 1 粘滞 / 2 连发 / 3 粘滞+连发），
+//低 4 位才是真正的设备类型 —— 和 6kb 固件同一套。
+void keyOperation(){
+  for(uint8_t i = 0; i < BUTTONCOUNT; i++){
+    if(keyDown(i)){
+      //遍历此按键的槽，直到遇到 DEVICE 为 0
+      for (uint8_t key_map_addr = 0; key_map_addr < MAX_BINDINGS_PER_KEY; key_map_addr++) {
+        uint8_t device = key_map[i][key_map_addr][DEVICE] & 0x0F;
+        uint8_t behavior = (key_map[i][key_map_addr][DEVICE] & 0xF0) >> 4;
+        uint8_t offset = key_map[i][key_map_addr][KEYOFFSET];
+        if (key_map[i][key_map_addr][DEVICE] == NO_DEVICE) {
+          break;  //空槽：本按键的映射到此为止
+        }
+        if(behavior == 0) {
+          //behavior 为 0 则为常规按键
+          keyCodeWrite(device, offset);
+          continue;
+        }else{
+          //否则，有特殊功能
+          switch (behavior){
+            case STICKY:
+            {
+              if(device == TOGGLE){
+                if(keyDownEdge(i)){
+                  stickyKeyBehavior_toggle();
+                }
+              }
+              if(device == 0x0E){
+                if(keyDownEdge(i)){
+                  stickyKeyBehavior_stateSwitch(i);
+                }
+              }
+            break;
+            }
+            case RAPID_TAB:
+            {
+              if(device == TOGGLE){
+                if(keyDownEdge(i)){
+                  rapidTabBehavior_toggle();
+                }
+              }else if(device == RAPID_TAB_INC){
+                if(keyDownEdge(i)){
+                  rapidTabInterval_Increase();
+                }
+              }else if(device == RAPID_TAB_DEC){
+                if(keyDownEdge(i)){
+                  rapidTabInterval_Decrease();
+                }
+              }else{
+                rapidTabBehavior(i, device, offset);
+              }
+              break;
+            }
+          }
         }
       }
-    }
-  }
-}
-void keyOperationGlobal(uint16_t keyTriggerState){
-  // 清空键盘按键报告,方便处理同时按下
-  // memset(report.keyboardKeys, 0, sizeof(report.keyboardKeys));
-  for(int i = 0; i < BUTTONCOUNT; i++){
-    if((keyTriggerState >> i) & 1){
- 
     }
   }
 }

@@ -1,9 +1,13 @@
-﻿// #include <FastLED.h>
+﻿// FastLED 必须最先 include：它的模板参数里有个名字叫 CONTROLLER，
+// 而 Universal.h 里 #define CONTROLLER 2，先包含固件头再包含 FastLED 会撞名。
+#include <FastLED.h>
 #include "KeyManager.h"
 #include "EncoderManager.h"
 #include "SubHID.h"
 #include "HallUnitManager.h"
 #include "EEPROMManager.h"
+#include "KeyBehaviorEEPROM.h"   // 连发参数的 EEPROM 存读
+#include "WS2812BManager.h"      // 灯效（14 颗 WS2812B，数据脚 LEDPIN/D13）
 #include "HIDcmdHandler.h"
 // extern volatile HIDConReport_t report;
 
@@ -20,6 +24,7 @@ void setup(){
   digitalWrite(SEL_2,LOW);
   pinMode(RD_0,INPUT);
   pinMode(RD_1,INPUT);
+  // Serial.begin(9600);
   #if DEBUG
     Serial.begin(9600);
     while (!Serial) {
@@ -27,9 +32,13 @@ void setup(){
     }
     Serial.println("Serial connected");
   #endif
+  wsInit();                      // 灯带初始化（FastLED.addLeds + 清屏）
+  ledParamsGetFromEEPROM();      // 读灯效参数；无效就写默认值
   flagInit();
   keyParameterInit();
   keyCodeInit();
+  //连发参数：紧跟在灯效参数区之后，上电读一次
+  rapidParamsGetFromEEPROM();
   // calibrateKey(0);
   // delay(600);
   // readFromEEPROM();
@@ -38,9 +47,12 @@ void setup(){
 void loop() {
   //每帧只在这里读一次 millis()，其它地方都用 getFrameTime()
   frameTimeUpdate();
+  //扫描 + 状态机：结果写在 keys[] 里（每键一个结构体）
+  updateKeyState();
   reportBufferClear();
-  // keyOperationGlobal(getKeyState());
-  keyOperation(getKeyState());
+  keyOperation();
+  keyOperation_stickyKey();
+  // wsTick();                      // 灯效：内部按 fps 限速，每帧只 FastLED.show() 一次
   encoderRotateStateRefresh();
   // for(int i = 0; i < BUTTONCOUNT; i++){
   //   Serial.print(" ");
@@ -48,13 +60,13 @@ void loop() {
   // }
   // Serial.print("\n");
   // if(debug < 500){
-  //   Serial.print(getKeyState());
+  //   Serial.print(keys[0].down);
   //   Serial.print("\n");
   //   debug = 0;
   // }
   // debug += 1;
   // for(int i = 0; i<BUTTONCOUNT; i++){
-  //   if((buttonbuf >> i) & 1){
+  //   if(keyDown(i)){
   //     // keyOperation(i);
   //   }
   // }

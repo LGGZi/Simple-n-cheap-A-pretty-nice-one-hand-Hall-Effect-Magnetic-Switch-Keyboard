@@ -8,12 +8,16 @@
 - 目标芯片：ATmega32u4（Arduino Leonardo 内核，`arduino:avr:leonardo`）
 - 按键数量：`BUTTONCOUNT = 14`，按键类型：霍尔（磁轴），每键一个模拟通道，靠 3 根选择线分时扫描
 - 编码器：1 个（旋钮 + 按键）
-- 固件版本：`FIRMWARE_VERSION`（`Universal.h`，当前 `0x44` = 1.04）
+- 固件版本：`FIRMWARE_VERSION`（`Universal.h`，当前 `0x4A` = 1.12）
 - 要求的上位机版本：`HOST_VERSION_REQUIRED`（`Universal.h`，当前 `0x47` = 1.07）
+- 按键行为：和 6kb 同一套（粘滞键 / 连发 / 粘滞+连发），协议与 EEPROM 布局一致，
+  详见 6kb 的 `README.md` 第 5.4 节和本文第 5 章
+- 灯效：**14 颗 WS2812B（每键一颗），数据脚 `LEDPIN = D13`**，23 种效果，参数存 EEPROM；
+  灯效实现是从 6kb 的 `WS2812BManager.h` 整体搬过来的，只改了引脚、灯数和 14 键的物理坐标表
 - 上位机协议：Report ID **4**，8 字节指令（与 KeyboardOG 上位机配套）
 
-> 和六键版（`6kb`）的关系：协议、映射格式、EEPROM 映射区布局一致；
-> 区别是**有模拟扫描 / RT / 校准 / 编码器**，没有 RGB 灯。
+> 和六键版（`6kb`）的关系：协议、映射格式、按键行为、灯效、EEPROM 布局（参数区 → 映射区 →
+> 灯效参数区 → 连发参数区）都一致；区别是**多了模拟扫描 / RT / 校准 / 编码器**。
 
 ---
 
@@ -23,10 +27,13 @@
 |---|---|---|
 | `rtkb-layout-edited.ino` | `setup()` / `loop()`：初始化顺序、主循环调度 | 加新的每轮任务 |
 | `Universal.h` | 全局配置：按键数、映射槽数、EEPROM 容量约定、引脚、全局数组（参数/映射/report）、固件版本 | 改按键数、改引脚、加全局状态 |
-| `HallUnitManager.h` | 模拟扫描 `_kbScan()`、按键状态机 `getKeyState()`、校准 `calibrateKey()` | 改手感（RT/死区）、改扫描顺序 |
-| `KeyManager.h` | 把按键位图翻译成 HID 报文（键盘/手柄/鼠标/多媒体） | 改映射语义、加设备类型 |
-| `EEPROMManager.h` | EEPROM 布局、参数与映射的读写、启动时载入内存 | 改存储格式、改参数默认值 |
-| `HIDcmdHandler.h` | 上位机指令解析、ACK/FIN、查询回传、设备信息帧 | 加指令、改回传格式 |
+| `HallUnitManager.h` | 模拟扫描 `_kbScan()`、按键状态机 `updateKeyState()`、校准 `calibrateKey()` | 改手感（RT/死区）、改扫描顺序 |
+| `KeyManager.h` | 把 `keys[]` 里的按下状态翻译成 HID 报文（键盘/手柄/鼠标/多媒体） | 改映射语义、加设备类型 |
+| `EEPROMManager.h` | EEPROM 布局（参数区 / 映射区 / 灯效参数区）、参数与映射的读写、灯效参数存取、启动时载入内存 | 改存储格式、改参数默认值 |
+| `WS2812BManager.h` | 灯效：14 颗 WS2812B、23 种效果、参数结构体与帧调度（和 6kb 同一份代码） | 加灯效、调参数、改灯珠顺序 |
+| `KeyBehaviorManager.h` | 按键行为：粘滞键 / 连发 / 粘滞+连发（和 6kb 同一份代码） | 加新的 behavior、改功能时序 |
+| `KeyBehaviorEEPROM.h` | 连发参数的 EEPROM 存读（`RAPID_PARAMS_START_POSITION`，紧跟灯效参数区） | 改参数存储格式 |
+| `HIDcmdHandler.h` | 上位机指令解析、ACK/FIN、查询回传、设备信息帧、连发参数协议 | 加指令、改回传格式 |
 | `LayoutManager.h` | 配列（每键 x/y/w/h）表 + 逐键上传（`0xFE` 帧） | 换配列（用 `kle2c.py` 生成） |
 | `EncoderManager.h` | 编码器正交解码 + 把“旋钮一格”模拟成按键脉冲 | 改旋钮方向/步数、改旋钮映射 |
 | `HID.cpp` / `HID.h` / `SubHID.cpp` / `SubHID.h` | 复合 HID 描述符与报文发送 | 改报文结构、加 HID 接口 |
@@ -38,10 +45,13 @@
 ```c
 delay(1000);                 // 等 USB 稳定，避免枚举失败
 pinMode(编码器 3 根 / SEL_0..2 / RD_0..1);
-Serial.begin(9600);          // 调试串口（getKeyState 里目前有打印，见 §9）
+Serial.begin(9600);          // 调试串口（updateKeyState 里目前有打印，见 §9）
+wsInit();                    // 灯带初始化（FastLED.addLeds + 清屏 + 关抖动）
+ledParamsGetFromEEPROM();    // 灯效参数（无效就写默认值并 wsApplyParams）
 flagInit();                  // 先扫一次，把当前读数当成高/低阈值初值
 keyParameterInit();          // 从 EEPROM 载入 14 键的 6 个参数
-keyCodeInit();               // 从 EEPROM 载入 14 键的映射到 key_map[][][]
+keyCodeInit();               // 从 EEPROM 载入 14 键的映射到 key_map[][][]（末尾调 stickyKeyInit）
+rapidParamsGetFromEEPROM();  // 连发参数（紧跟灯效参数区；无效就写默认值）
 ```
 
 顺序有依赖：`flagInit()` 必须在参数载入之前跑（它用初始读数压住阈值，避免上电第一轮误触发）。
@@ -51,8 +61,12 @@ keyCodeInit();               // 从 EEPROM 载入 14 键的映射到 key_map[][]
 ## 3. 主循环（`loop()`）
 
 ```c
+frameTimeUpdate();                // 每帧只读一次 millis()（见 §3.1）
+updateKeyState();                 // 扫描 + 状态机 → keys[]（每键一个结构体）
 reportBufferClear();              // 每轮清空 HID 报文
-keyOperation(getKeyState());      // 扫描 + 状态机 → 位图 → 填 report
+keyOperation();                   // 按 keys[] 填 report（含 behavior 分派）
+keyOperation_stickyKey();         // 粘滞键 / 粘滞+连发：把“保持输出”的键写进 report
+wsTick();                         // 灯效：内部按 fps 限速，每帧只 FastLED.show() 一次
 encoderRotateStateRefresh();      // 旋钮解码，必要时往 report 里打“按下”位
 ENCButtonOnPress(calibrateAll);   // 旋钮按键：按住 ≥10 轮后松开 → 触发全部校准
 HIDcmdResponseIfChanged();        // 处理上位机指令（去重后回应）
@@ -62,7 +76,7 @@ delayMicroseconds(500);           // 主循环节拍
 
 - `HIDStateUpdate(2)` 是“隔轮发送”，把实际 USB 报文频率压到扫描频率的一半；
 - `report` 每轮清零再重建，所以映射是“电平触发”，松手即消失；
-- **扫描频率直接受 `getKeyState()` 里调试打印影响**（见 §9）。
+- **扫描频率直接受 `updateKeyState()` 里调试打印影响**（见 §9）。
 
 ### 3.1 时间基准（`frame_time`）
 
@@ -86,7 +100,9 @@ static inline uint32_t getFrameTime() { return frame_time; }      // 其它地�
 
 - 3 根选择线 `SEL_0..2` 选 8 个列；
 - 2 根模拟读线 `RD_0(A0)`、`RD_1(A1)`；
-- 每个 (列, 读线) 对应一个按键 → 8×2 = 16 个通道，实际用 14 个。
+- 每个 (列, 读线) 对应一个按键 → 8×2 = 16 个通道，实际用 14 个；
+- 灯带：14 颗 WS2812B（每键一颗），数据脚 `LEDPIN` = **D13**；灯珠顺序默认按按键 0~13，
+  物理位置表在 `WS2812BManager.h` 的 `wsKeyPos[]`（2D 效果用），灯带实际顺序不同就改这张表。
 
 ### 4.2 物理通道 ↔ 按键编号
 
@@ -109,7 +125,7 @@ static inline uint32_t getFrameTime() { return frame_time; }      // 其它地�
 
 ---
 
-## 5. 按键状态机（`getKeyState()`）
+## 5. 按键状态机（`updateKeyState()`）
 
 ### 5.1 数据结构
 
@@ -119,15 +135,40 @@ static uint16_t high_buttonflag[BUTTONCOUNT]; // 释放阈值（抬到这儿算�
 static uint16_t low_buttonflag[BUTTONCOUNT];  // 按下阈值（压到这儿算按下）
 ```
 
-### 5.2 位图的“锁存”约定（重点）
+按键状态本身放在 `Universal.h` 的 `keys[]` 里，和 6kb 固件是同一套结构体：
 
 ```c
-static uint16_t buttonbuf;   // ★ 必须是 static
+struct KeyRuntime {
+  uint8_t  down;       // 状态机判定后的按下状态（对外唯一真相）
+  uint8_t  down_edge;  // 只在“刚按下”那一帧为 1（粘滞键 / 连发靠它触发）
+  uint32_t pressedAt;  // 最近一次检测到按下的 frame_time（6kb 用它做抬起去抖）
+};
+static KeyRuntime keys[BUTTONCOUNT];
 ```
 
-位**只在发生跳变的那一轮**被置位/清除；按键停在中间位置时两个条件都不成立，这一位保持原样。
-一旦写成局部变量 `uint16_t buttonbuf = 0;`，每次调用都会把上一轮状态丢掉，
-表现就是“读数正常但按键时有时无、只有跳变那一瞬间能读到”——这是实际踩过的坑。
+对外只用 `keyDown(i)` / `keyDownEdge(i)` 读，不要直接改 `keys[i].down`。
+
+> 2026-11 之前这里是 `static uint16_t buttonbuf` 位图：最多 16 键，而且以后每加一个功能
+> （粘滞键 / 连发）都得再加一条同长度的并行数组。改成结构体数组后位宽不再受限，
+> 也给后面移植 6kb 的按键行为留好了位置。
+
+### 5.2 锁存约定（重点）
+
+`down` **只在发生跳变的那一轮**被置位/清除；按键停在中间位置时两个条件都不成立，保持原样。
+一旦写成每轮重算的临时变量，中间位置的状态就会丢，表现是“读数正常但按键时有时无、
+只有跳变那一瞬间能读到”——这是实际踩过的坑（当年的 `buttonbuf` 必须是 `static` 也是这个原因）。
+
+边沿检测用和 6kb **完全一样**的写法：`updateKeyState()` 里有一个跨扫描保存的
+
+```c
+static uint8_t pre_button_state[BUTTONCOUNT] = {0};
+```
+
+循环末尾 `pre_button_state[i] = keys[i].down;`，下一帧用它判断“这一帧是不是刚从松开变按下”。
+（它必须 `static`：写成循环里的局部变量的话每帧都从 0 开始，边沿就永远成立。）
+
+`down_edge` / `pressedAt` 的维护也和 6kb 一致：按键按着时每帧刷新 `pressedAt`；
+`down` 由 0 变 1 的那一帧置 `down_edge = 1`，其余帧清 0。
 
 ### 5.3 判定逻辑（死区优先）
 
@@ -137,11 +178,11 @@ static uint16_t buttonbuf;   // ★ 必须是 static
 U = bt_maximum - high_deadzone;      // 上死区边界
 L = bt_minimum + low_deadzone;       // 下死区边界
 
-if (s > U)        { 清位; low  = U - rt_active; high = U + 1; }       // 进入上死区 = 已释放
-else if (s < L)   { 置位; high = L + rt_deactive; low = L - 1; }      // 进入下死区 = 已按下
+if (s > U)        { down = 0; low  = U - rt_active; high = U + 1; }       // 进入上死区 = 已释放
+else if (s < L)   { down = 1; high = L + rt_deactive; low = L - 1; }      // 进入下死区 = 已按下
 else {
-    if (s <= low)  { 置位; low = s - 1; high = s + rt_deactive; }
-    if (s >= high) { 清位; high = s + 1; low = s - rt_active; }
+    if (s <= low)  { down = 1; low = s - 1; high = s + rt_deactive; }
+    if (s >= high) { down = 0; high = s + 1; low = s - rt_active; }
     // 另外两条“回锚”分支让阈值跟着当前读数走
 }
 ```
@@ -174,10 +215,10 @@ else {
 ### 6.1 `key_map`
 
 ```c
-uint8_t key_map[BUTTONCOUNT][MAXIMUM_BINDABLE_KEY][2];  // [按键][槽][device, offset]
+uint8_t key_map[BUTTONCOUNT][MAX_BINDINGS_PER_KEY][2];  // [按键][槽][device, offset]
 ```
 
-- 每键最多 `MAXIMUM_BINDABLE_KEY = 12` 条映射，**按顺序**生效；
+- 每键最多 `MAX_BINDINGS_PER_KEY = 12` 条映射，**按顺序**生效；
 - 槽的 `device == NO_DEVICE(0)` 表示到此为止。
 
 ### 6.2 device / offset 语义
@@ -214,8 +255,16 @@ uint8_t key_map[BUTTONCOUNT][MAXIMUM_BINDABLE_KEY][2];  // [按键][槽][device,
                            [6]=RT_DEACTIVE [8]=UPPER [10]=LOWER（每个 uint16_t 占 2 字节）
 偏移 168                   映射区：BUTTONCOUNT * KEYMAP_SIZE_PER_KEY = 14 * 24 = 336 字节
                            每键 12 槽 × (device, offset) 2 字节
-合计                       504 字节（ATmega32u4 有 1024 字节，剩余约 520）
+偏移 504                   灯效参数区：sizeof(LEDParams_t) = 11 字节
+                           magic(0x5B)/effect/brightness/speed/fps/color1[3]/color2[3]
+偏移 515                   连发参数区：RapidKeyArgs_t = 7 字节
+                           magic(0x6B)/toggle/pulse/interval/variation（见 KeyBehaviorEEPROM.h）
+合计                       522 字节（ATmega32u4 有 1024 字节，剩余约 502）
 ```
+
+> 顺序和 6kb 一致：参数区 → 映射区 → 灯效参数区 → 连发参数区。
+> 6kb 的 README 把灯效参数写成“10 字节 / 偏移 155”，那是笔误：结构体实际 11 字节，
+> 它的代码用 `sizeof(LEDParams_t)` 算位置（连发参数实际在 156），这里按代码口径对齐。
 
 约定：
 
@@ -237,6 +286,28 @@ uint8_t key_map[BUTTONCOUNT][MAXIMUM_BINDABLE_KEY][2];  // [按键][槽][device,
 | `CMD_QUERY` | 0x04 | 查询：`[1]=0 映射 / 1 参数 / 0xFE 布局 / 0xFF 设备信息` |
 | `CMD_ACK` / `CMD_FIN` | 0x05 / 0x06 | 回传用 |
 | `CMD_REFRESH` | 0x07 | 让固件从 EEPROM 重新载入 |
+| `CMD_SET_LED` | 0x08 | 即时灯效：`[1]=effect [2]=亮度 [3]=速度 [4..6]=主色 RGB` |
+| `CMD_SET_LED_ACCENT` | 0x09 | 即时副色：`[1..3]=副色 RGB` |
+| `CMD_SAVE_LED` | 0x0A | 保存灯效参数：`[1]=0x5A` 确认（别和结构体 magic 0x5B 混用） |
+| `CMD_SET_LED_FPS` | 0x0B | 单独设置灯效刷新率：`[1]=fps（10~200）` |
+| `CMD_SET_RAPID` | 0x0C | 写连发参数：`[1]=保留 [2]=脉宽 [3..4]=间隔 [5..6]=步长` |
+| `CMD_SAVE_RAPID` | 0x0D | 保存连发参数到 EEPROM：`[1]=0x6C`（固件先把开关强制置 1） |
+
+连发参数查询：`CMD_QUERY` 的 `[1]=1`、`[2]=RAPID_TAB(0x02)`（Byte3 复用成参数组），
+固件回 4 帧后 FIN：
+
+| 帧 | 值 | 字节布局 |
+|---|---|---|
+| 参数 | `0x02` | `[1]=参数码(0x10 开关 / 0x11 脉宽 / 0x12 间隔 / 0x13 步长) [2]=0x02 [3..4]=值 [5..6]=0 [7]=序号` |
+
+灯效查询（`[1]=0x03`）：固件回两帧后 FIN。8 字节装不下 11 个参数字节，所以拆成两帧：
+
+| 帧 | 值 | 字节布局 |
+|---|---|---|
+| 基本参数 | `0x0C` | `[1]=effect [2]=亮度 [3]=速度 [4]=fps [5..6]=0 [7]=序号` |
+| 颜色 | `0x0D` | `[1..3]=主色 RGB [4..6]=副色 RGB [7]=序号` |
+
+灯效编号和 6kb 完全一致（0~22，见 6kb 的 `README.md` §8.4）。
 
 参数写入的限制（`keyParameterSet`）：
 
@@ -276,23 +347,26 @@ uint8_t key_map[BUTTONCOUNT][MAXIMUM_BINDABLE_KEY][2];  // [按键][槽][device,
 
 ### 9.1 串口输出
 
-`getKeyState()` 末尾目前有逐键打印（只看 0 号键，**每个扫描一行**）：
+`updateKeyState()` 末尾目前有逐键打印（只看 0 号键，**每个扫描一行**）：
 
 ```
-buttonstate  high_buttonflag  low_buttonflag  ((buttonbuf >> i) & 1)
+buttonstate  high_buttonflag  low_buttonflag  keys[0].down
 ```
 
 注意：
 
 1. 打印必须在 `#if DEBUG` 或临时开关里，14 个键每个 5 次 `Serial.print` 在 9600 波特率下
    每轮约 200 字节，会明显拖慢主循环（扫描从几百 Hz 掉到几 Hz）；
-2. 想看状态位要写 `((buttonbuf >> i) & 1)`；写成 `(buttonbuf >> 0) & i` 是没意义的。
+2. 想看某键状态用 `keyDown(i)`（或 `keys[i].down`）；`keys[i].down_edge` 只在按下那一帧为 1。
+
+> 当前工作区里这段打印是**打开**的（`if(i == 0){ ... }` 没有 `#if DEBUG` 包着），
+> 调试完记得注释回去，否则会一直往串口写。
 
 ### 9.2 常见现象 → 可能原因
 
 | 现象 | 先看哪里 |
 |---|---|
-| 按键“有时有、有时没有”，读数正常 | `buttonbuf` 是不是 `static`（§5.2） |
+| 按键“有时有、有时没有”，读数正常 | `down` 是否每轮被重算（§5.2 的锁存约定） |
 | 某个键一直按下 / 一直松开 | 该键 `low/high` 是否贴边、`bt_maximum/minimum` 是否已校准 |
 | 按下去要很深才触发 | `rt_active` 太大，或该键 `bt_minimum` 没校准 |
 | 松手后还粘着 | `rt_deactive` 太大，或 `low_deadzone` 让低值被判按下 |
@@ -314,10 +388,10 @@ buttonstate  high_buttonflag  low_buttonflag  ((buttonbuf >> i) & 1)
 
 ```
 setup: 引脚 → Serial → flagInit → keyParameterInit → keyCodeInit
-loop : 清报文 → getKeyState(扫描+状态机) → 编码器 → 旋钮按键 → 指令 → 发送 → 500us
+loop : 帧时间 → updateKeyState(扫描+状态机→keys[]) → 清报文 → keyOperation → 编码器 → 旋钮按键 → 指令 → 发送 → 500us
 
 按键数据: ADC(0..1023) → buttonstate[i]
-          → 死区判定 → 与 low/high 比较 → buttonbuf 位（static 锁存）
+          → 死区判定 → 与 low/high 比较 → keys[i].down（锁存）+ down_edge/pressedAt
           → keyOperation() 查 key_map → report 各字段
           → HIDStateUpdate(2) 每两轮发一次
 

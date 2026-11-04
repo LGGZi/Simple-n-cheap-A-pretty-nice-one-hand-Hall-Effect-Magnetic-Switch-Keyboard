@@ -1,10 +1,10 @@
-﻿#ifndef Universal_h
+#ifndef Universal_h
 #define Universal_h
 //在这里开启或关闭串口DEBUG
 #include "SubHID.h"
 #define DEBUG 0
 #define HOST_VERSION_REQUIRED 0x47   // 设备信息 [6]：这套固件要求的上位机版本（2|3|3 位）
-#define FIRMWARE_VERSION 0x44
+#define FIRMWARE_VERSION 0x4A        // 1.12：粘滞 / 连发 / 粘滞+连发 + 连发参数 EEPROM（和 6kb 对齐）
 
 /*-----------------------------------------------------------------------------
   统一时间基准
@@ -33,13 +33,13 @@ static inline uint32_t getFrameTime() {
 #define RT_DEACTIVE 6
 #define UPPER_DEADZONE 8
 #define LOWER_DEADZONE 10
-#define MAXIMUM_BINDABLE_KEY 12
-//每个按键在 EEPROM 里占用的映射空间：每个映射 2 字节(device, offset) * MAXIMUM_BINDABLE_KEY
+#define MAX_BINDINGS_PER_KEY 12
+//每个按键在 EEPROM 里占用的映射空间：每个映射 2 字节(device, offset) * MAX_BINDINGS_PER_KEY
 //整个映射区 = BUTTONCOUNT * KEYMAP_SIZE_PER_KEY 字节，紧接在按键参数区
 //(BUTTONCOUNT * PSOOSK) 之后，各按键的区域依次紧挨着排列。
 //注意：这里不做 EEPROM 越界检查 —— 改按键数 / 最大映射数 / 换芯片时请自行核算总占用
 //（ATmega32u4 = 1024 字节，例：参数区 14*12 = 168，映射区 14*12*2 = 336，共 504）
-#define KEYMAP_SIZE_PER_KEY (MAXIMUM_BINDABLE_KEY * 2)
+#define KEYMAP_SIZE_PER_KEY (MAX_BINDINGS_PER_KEY * 2)
 #define NO_DEVICE 0
 #define KEYBOARD 1
 #define CONTROLLER 2
@@ -53,6 +53,19 @@ static inline uint32_t getFrameTime() {
 #define MOUSE_Y 10
 #define CONTROLLER_LEFT_TRIGGER 11
 #define CONTROLLER_RIGHT_TRIGGER 12
+
+//按键行为：映射 device 字节的高 4 位（和 6kb 固件一致）
+#define STICKY 0x01
+#define RAPID_TAB 0x02
+#define STICKY_RAPID_TAB 0x03
+//低 4 位控制码：只在 behavior != 0 时有意义，按 behavior 分区解读
+//  粘滞键（behavior=1）：0x0E 切换开关 / 0x0F 功能总开关
+//  连发  （behavior=2）：0x0D 间隔减少 / 0x0E 间隔增加 / 0x0F 功能总开关
+#define TOGGLE 0x0F
+#define STICKY_KEY_SWITCH 0x0E
+#define RAPID_TAB_INC 0x0E
+#define RAPID_TAB_DEC 0x0D
+
 //回报速率
 #define REPORT_DELAY 1000
 // Number of microseconds between HID reports
@@ -64,7 +77,7 @@ static inline uint32_t getFrameTime() {
 #define RD_1 A1
 #define BUTTONCOUNT 14
 
-#define LEDPIN 10
+#define LEDPIN 13
 #define ENC_BT 3
 //编码器AB相对应引脚
 #define ENC_L_A 2
@@ -80,7 +93,78 @@ uint16_t rt_active[BUTTONCOUNT] = {0};
 uint16_t rt_deactive[BUTTONCOUNT] = {0};
 uint16_t high_deadzone[BUTTONCOUNT] = {0};
 uint16_t low_deadzone[BUTTONCOUNT] = {0};
-uint8_t key_map[BUTTONCOUNT][MAXIMUM_BINDABLE_KEY][2] = {0};
+uint8_t key_map[BUTTONCOUNT][MAX_BINDINGS_PER_KEY][2] = {0};
+
+/*---------------------- 按键运行时状态 ----------------------
+  和 6kb 固件同一套结构体（直接复制过来）。以前是 uint16_t 位图 buttonbuf：
+  最多只能表示 16 个键，而且每加一个功能（粘滞 / 连发）就要再加一条同长度并行数组。
+  现在每键一个结构体，数组下标就是按键编号，不再有位宽限制：
+
+    down      状态机（RT / 死区）判定后的按下状态，对外唯一真相，keyDown() 读它
+    down_edge 只在“刚按下”那一帧为 1（粘滞键 / 连发靠它触发）
+    pressedAt 最近一次检测到按下的 frame_time（长按 / 连发计时用）
+
+  磁轴没有独立的数字电平，所以这里不需要 6kb 的 raw 字段，已经去掉。
+  对外只读 keyDown(i) / keyDownEdge(i)，不要直接改 keys[i].down。
+--------------------------------------------------------------*/
+struct KeyRuntime {
+  uint8_t  down;
+  uint8_t  down_edge;
+  uint32_t pressedAt;
+};
+
+static KeyRuntime keys[BUTTONCOUNT];
+
+static inline bool keyDown(uint8_t i) { return keys[i].down != 0; }
+static inline bool keyDownEdge(uint8_t i)  { return keys[i].down_edge != 0; }
+
+/*---------------------- 连发参数 ----------------------
+  整块结构体直接存进 EEPROM（位置见 KeyBehaviorEEPROM.h 的
+  RAPID_PARAMS_START_POSITION，紧跟在映射区之后）。
+
+  magic      数据有效性标记（EEPROM 没写过是 0xFF，读出来对不上就回默认）
+  toggle     连发功能总开关：1 = 开，0 = 关（默认开）
+  pulse      每次连发按下持续多少 ms
+  interval   连发间隔 ms
+  variation  步长：键盘上“间隔增加 / 减少”映射每按一次改多少 ms
+
+  注意：AVR 上按 1 字节对齐，sizeof(RapidKeyArgs_t) = 7（magic/toggle/pulse/interval/variation），
+  位置宏用 sizeof 算，别写死字节数。
+--------------------------------------------------------*/
+#define RAPID_PARAMS_MAGIC     0x6B   // EEPROM 里的结构体首字节，判断数据有效
+#define RAPID_SAVE_CONFIRM     0x6C   // CMD_SAVE_RAPID 的 [1] 确认字节（别和 magic 混用）
+#define RAPID_TOGGLE_DEFAULT   1
+#define RAPID_PULSE_DEFAULT    15
+#define RAPID_PULSE_MIN        1
+#define RAPID_PULSE_MAX        200
+#define RAPID_INTERVAL_DEFAULT 100
+#define RAPID_INTERVAL_MIN     10
+#define RAPID_INTERVAL_MAX     5000
+#define RAPID_VARIATION_DEFAULT 10
+#define RAPID_VARIATION_MIN     0
+#define RAPID_VARIATION_MAX     200
+
+//连发参数在“参数查询/回传”里用的参数码（和磁轴参数共用一套帧格式）
+#define RAPID_PARAM_TOGGLE      0x10
+#define RAPID_PARAM_PULSE       0x11
+#define RAPID_PARAM_INTERVAL    0x12
+#define RAPID_PARAM_VARIATION   0x13
+
+struct RapidKeyArgs_t {
+  uint8_t  magic;
+  uint8_t  toggle;
+  uint8_t  pulse;
+  uint16_t interval;
+  uint16_t variation;
+};
+
+struct RapidKeyArgs_t rk_args = {
+  .magic     = RAPID_PARAMS_MAGIC,
+  .toggle    = RAPID_TOGGLE_DEFAULT,
+  .pulse     = RAPID_PULSE_DEFAULT,
+  .interval  = RAPID_INTERVAL_DEFAULT,
+  .variation = RAPID_VARIATION_DEFAULT,
+};
 
 volatile HIDConReport_t report;
 static uint8_t step = 1;
