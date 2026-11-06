@@ -1,4 +1,4 @@
-﻿// FastLED 必须最先 include：它的模板参数里有个名字叫 CONTROLLER，
+// FastLED 必须最先 include：它的模板参数里有个名字叫 CONTROLLER，
 // 而 Universal.h 里 #define CONTROLLER 2，先包含固件头再包含 FastLED 会撞名。
 #include <FastLED.h>
 #include "KeyManager.h"
@@ -24,7 +24,6 @@ void setup(){
   digitalWrite(SEL_2,LOW);
   pinMode(RD_0,INPUT);
   pinMode(RD_1,INPUT);
-  // Serial.begin(9600);
   #if DEBUG
     Serial.begin(9600);
     while (!Serial) {
@@ -49,28 +48,19 @@ void loop() {
   frameTimeUpdate();
   //扫描 + 状态机：结果写在 keys[] 里（每键一个结构体）
   updateKeyState();
+  
   reportBufferClear();
+
   keyOperation();
   keyOperation_stickyKey();
+  // 灯效默认关闭（有意为之，不是忘了开）：
+  // 14 颗 WS2812B 刷新时电流会突变（全白可达数百 mA），顺着 5V 走线和地线产生压降/地弹；
+  // 霍尔是比例式输出、ADC 又以 AVCC（同一路 5V）为基准，电源波动会直接叠加到读数上，
+  // 让行程百分比和 RT 阈值跟着抖。需要灯效时再取消注释，并接受读数抖动/做硬件滤波。
   // wsTick();                      // 灯效：内部按 fps 限速，每帧只 FastLED.show() 一次
   encoderRotateStateRefresh();
-  // for(int i = 0; i < BUTTONCOUNT; i++){
-  //   Serial.print(" ");
-  //   Serial.print(buttonstate[i]);
-  // }
-  // Serial.print("\n");
-  // if(debug < 500){
-  //   Serial.print(keys[0].down);
-  //   Serial.print("\n");
-  //   debug = 0;
-  // }
-  // debug += 1;
-  // for(int i = 0; i<BUTTONCOUNT; i++){
-  //   if(keyDown(i)){
-  //     // keyOperation(i);
-  //   }
-  // }
   ENCButtonOnPress(calibrateAll);
+
   HIDcmdResponseIfChanged();
   HIDStateUpdate(2);
   delayMicroseconds(500);
